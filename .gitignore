@@ -38,5 +38,6 @@ Thumbs.db
 /tests/
 /tools/
 /*.docx
+/README.md
 # 数据库自检脚本的输出
 /db/verify_output.txt
