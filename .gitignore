@@ -1,0 +1,27 @@
+# 后端构建产物
+target/
+*.jar
+*.war
+*.class
+
+# 前端依赖与构建产物
+node_modules/
+dist/
+dist-ssr/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 操作系统
+Thumbs.db
+.DS_Store
+
+# 本机数据库口令等本地配置覆盖
+**/application-local.yml
+**/application-local.properties

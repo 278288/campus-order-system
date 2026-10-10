@@ -1,0 +1,48 @@
+server:
+  port: 8088
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: campus-order-backend
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/campus_order_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      pool-name: CampusOrderHikariPool
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: always
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      table-underline: true
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.zzx.campusorder.feature.**.entity
+
+campus-order:
+  jwt:
+    # 仅用于课程作业演示，生产环境应通过环境变量注入更长的随机密钥
+    secret: campus-order-system-jwt-secret-key-2520145325-zzx-2026
+    expire-minutes: 120
+  cors:
+    # 允许跨域的前端地址，多个地址以英文逗号分隔
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173
+
+logging:
+  level:
+    root: info
+    com.zzx.campusorder: debug
