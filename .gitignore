@@ -31,3 +31,12 @@ Thumbs.db
 # 本机数据库口令等本地配置覆盖
 **/application-local.yml
 **/application-local.properties
+
+# ---------------- 以下内容仅保留在本地，不纳入代码仓库 ----------------
+# 作业与实验文档、报告生成脚本、设计图、测试与排版工具
+/docs/
+/tests/
+/tools/
+/*.docx
+# 数据库自检脚本的输出
+/db/verify_output.txt
