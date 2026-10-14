@@ -18,6 +18,10 @@ public class UserVO implements Serializable {
     private String email;
     private Integer role;
     private String roleName;
+
+    /** 角色编码，如 ROLE_ADMIN，与 sys_role_menu 的授权主体一致 */
+    private String roleCode;
+
     private Integer status;
     private LocalDateTime lastLoginTime;
     private LocalDateTime createTime;

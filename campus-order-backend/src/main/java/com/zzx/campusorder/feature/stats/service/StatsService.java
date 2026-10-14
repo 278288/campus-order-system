@@ -2,7 +2,8 @@ package com.zzx.campusorder.feature.stats.service;
 
 import com.zzx.campusorder.common.exception.BusinessException;
 import com.zzx.campusorder.common.security.Roles;
-import com.zzx.campusorder.common.security.UserContext;
+import com.zzx.campusorder.common.security.SecurityUtils;
+import com.zzx.campusorder.common.security.Roles;
 import com.zzx.campusorder.feature.order.entity.Order;
 import com.zzx.campusorder.feature.order.entity.OrderStatus;
 import com.zzx.campusorder.feature.stats.mapper.StatsMapper;
@@ -56,12 +57,13 @@ public class StatsService {
 
         Long effectiveWindowId;
         String scope;
-        if (Roles.MERCHANT.equals(UserContext.requireRole())) {
+        if (SecurityUtils.hasRole(Roles.MERCHANT)) {
+            // 商家只能统计本人所属窗口，服务端忽略前端传入的 windowId
             CanteenWindow window = windowService.requireMerchantWindow();
             effectiveWindowId = window.getId();
             scope = "window";
         } else {
-            Roles.requireAdmin();
+            // 管理员可统计全平台或指定窗口
             effectiveWindowId = windowId;
             scope = windowId == null ? "all" : "window";
         }

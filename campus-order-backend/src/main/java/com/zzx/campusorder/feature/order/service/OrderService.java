@@ -6,7 +6,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zzx.campusorder.common.exception.BusinessException;
 import com.zzx.campusorder.common.result.PageResult;
 import com.zzx.campusorder.common.security.Roles;
-import com.zzx.campusorder.common.security.UserContext;
+import com.zzx.campusorder.common.security.DbUserDetails;
+import com.zzx.campusorder.common.security.SecurityUtils;
 import com.zzx.campusorder.feature.dish.entity.Dish;
 import com.zzx.campusorder.feature.dish.mapper.DishMapper;
 import com.zzx.campusorder.feature.order.dto.OrderCreateRequest;
@@ -80,8 +81,7 @@ public class OrderService {
      * 这样并发冲突导致的事务回滚不会把外层事务一起标记为回滚。</p>
      */
     public OrderVO createOrder(OrderCreateRequest request) {
-        Roles.requireStudent();
-        Long userId = UserContext.requireUserId();
+        Long userId = SecurityUtils.requireUserId();
 
         // 步骤 1：幂等检查。命中则直接返回原订单，不重复扣库存
         Order existed = findByIdempotentKey(userId, request.getRequestNo());
@@ -203,7 +203,7 @@ public class OrderService {
      */
     public PageResult<OrderVO> pageOrders(String scope, Integer status, Long windowId,
                                           String orderNo, long pageNum, long pageSize) {
-        Long userId = UserContext.requireUserId();
+        Long userId = SecurityUtils.requireUserId();
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<Order>()
                 .eq(status != null, Order::getStatus, status)
                 .like(StringUtils.hasText(orderNo), Order::getOrderNo, orderNo)
@@ -213,11 +213,11 @@ public class OrderService {
         if ("mine".equalsIgnoreCase(scope)) {
             wrapper.eq(Order::getUserId, userId);
         } else if ("window".equalsIgnoreCase(scope)) {
-            Roles.requireMerchant();
+            // 商家范围：只能查本人所属窗口的订单
             CanteenWindow window = windowService.requireMerchantWindow();
             wrapper.eq(Order::getWindowId, window.getId());
         } else {
-            Roles.requireAdmin();
+            // 管理员范围：可查全平台，也可按窗口过滤
             wrapper.eq(windowId != null, Order::getWindowId, windowId);
         }
 
@@ -241,8 +241,7 @@ public class OrderService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO cancelOrder(String orderNo, String reason) {
-        Roles.requireStudent();
-        Long userId = UserContext.requireUserId();
+        Long userId = SecurityUtils.requireUserId();
         Order order = requireOrder(orderNo);
         if (!order.getUserId().equals(userId)) {
             throw BusinessException.forbidden("只能取消本人的订单");
@@ -275,8 +274,7 @@ public class OrderService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO rateOrder(String orderNo, OrderRateRequest request) {
-        Roles.requireStudent();
-        Long userId = UserContext.requireUserId();
+        Long userId = SecurityUtils.requireUserId();
         Order order = requireOrder(orderNo);
         if (!order.getUserId().equals(userId)) {
             throw BusinessException.forbidden("只能评价本人的订单");
@@ -302,8 +300,7 @@ public class OrderService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO updateStatusByMerchant(String orderNo, OrderStatusRequest request) {
-        Roles.requireMerchant();
-        Long userId = UserContext.requireUserId();
+        Long userId = SecurityUtils.requireUserId();
         Order order = requireOrder(orderNo);
         if (!windowService.belongsToMerchant(order.getWindowId(), userId)) {
             throw BusinessException.forbidden("只能操作本人所属窗口的订单");
@@ -360,8 +357,7 @@ public class OrderService {
      */
     @Transactional(rollbackFor = Exception.class)
     public OrderVO verifyPickupCode(String orderNo, String pickupCode) {
-        Roles.requireMerchant();
-        Long userId = UserContext.requireUserId();
+        Long userId = SecurityUtils.requireUserId();
         Order order = requireOrder(orderNo);
         if (!windowService.belongsToMerchant(order.getWindowId(), userId)) {
             throw BusinessException.forbidden("只能核验本人所属窗口的订单");
@@ -410,18 +406,20 @@ public class OrderService {
      * 查看权限：本人、所属窗口商家、管理员三者之一。
      */
     private void assertCanView(Order order) {
-        Long userId = UserContext.requireUserId();
-        Integer role = UserContext.requireRole();
-        if (Roles.ADMIN.equals(role)) {
+        Long userId = SecurityUtils.requireUserId();
+        // 管理员与超级管理员可查看全部订单
+        if (SecurityUtils.isSuperAdmin() || SecurityUtils.hasRole(Roles.ADMIN)) {
             return;
         }
-        if (Roles.STUDENT.equals(role)) {
+        // 师生用户只能查看本人订单
+        if (SecurityUtils.hasRole(Roles.STUDENT)) {
             if (!order.getUserId().equals(userId)) {
                 throw BusinessException.forbidden("无权查看他人订单");
             }
             return;
         }
-        if (Roles.MERCHANT.equals(role)) {
+        // 商家只能查看本人所属窗口的订单
+        if (SecurityUtils.hasRole(Roles.MERCHANT)) {
             if (!windowService.belongsToMerchant(order.getWindowId(), userId)) {
                 throw BusinessException.forbidden("无权查看其他窗口的订单");
             }

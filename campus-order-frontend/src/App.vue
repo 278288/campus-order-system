@@ -12,14 +12,18 @@ const cart = useCartStore()
 onMounted(async () => {
   // 购物车保存在浏览器本地，刷新后恢复
   cart.restore?.()
-  // 已有令牌时用后端数据刷新用户信息，确保角色与状态是最新的
+  // 已有令牌时用后端数据刷新用户信息与权限，确保角色、状态、权限都是最新的
   if (auth.token) {
     try {
       const { authApi } = await import('@/api')
-      const user = await authApi.me()
-      auth.setUser(user)
+      // /api/users/me 现在返回 { user, roles, permissions }，不再是 UserVO 本身
+      const res = await authApi.me()
+      if (res?.user) {
+        auth.setUser(res.user)
+      }
+      auth.setAuthorities({ roles: res?.roles, permissions: res?.permissions })
     } catch {
-      // 401 已由 axios 拦截器处理：清理会话并跳转登录页
+      // 401 由 axios 拦截器清理会话并跳转登录页，这里静默处理即可
     }
   }
 })

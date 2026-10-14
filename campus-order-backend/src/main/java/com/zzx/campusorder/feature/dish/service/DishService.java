@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zzx.campusorder.common.exception.BusinessException;
 import com.zzx.campusorder.common.result.PageResult;
 import com.zzx.campusorder.common.security.Roles;
-import com.zzx.campusorder.common.security.UserContext;
+import com.zzx.campusorder.common.security.SecurityUtils;
+import com.zzx.campusorder.common.security.DbUserDetails;
+import com.zzx.campusorder.common.security.Roles;
 import com.zzx.campusorder.feature.dish.dto.DishSaveRequest;
 import com.zzx.campusorder.feature.dish.entity.Dish;
 import com.zzx.campusorder.feature.dish.mapper.DishMapper;
@@ -74,8 +76,12 @@ public class DishService {
 
     /**
      * 商家查询本人窗口的全部菜品，包含已下架菜品（用于维护列表）。
+     * 该接口面向商家，必须校验角色，否则师生用户也能读到商家维护视图所需的数据。
      */
     public List<DishVO> listMyWindowDishes(Integer status) {
+        if (!SecurityUtils.hasRoleCode(Roles.CODE_MERCHANT)) {
+            throw BusinessException.forbidden("该操作仅食堂商家可执行");
+        }
         CanteenWindow window = windowService.requireMerchantWindow();
         List<Dish> dishes = dishMapper.selectList(new LambdaQueryWrapper<Dish>()
                 .eq(Dish::getWindowId, window.getId())
@@ -226,10 +232,11 @@ public class DishService {
      * 商家维护菜品时校验窗口归属，供其他模块复用。
      */
     public boolean isOwnWindow(Long windowId) {
-        UserContext.LoginUser loginUser = UserContext.get();
-        if (loginUser == null || loginUser.getRole() == null || loginUser.getRole() != Roles.MERCHANT) {
+        DbUserDetails details = SecurityUtils.currentUserOrNull();
+        // 权限注解已保证调用方持有 dish:* 权限；此处额外校验窗口归属，防止跨窗口操作
+        if (details == null || !SecurityUtils.hasRoleCode(Roles.CODE_MERCHANT)) {
             return false;
         }
-        return windowService.belongsToMerchant(windowId, loginUser.getUserId());
+        return windowService.belongsToMerchant(windowId, details.getUserId());
     }
 }

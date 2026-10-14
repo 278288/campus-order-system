@@ -185,9 +185,16 @@ watch([pageNum, pageSize], loadUsers)
               </td>
               <td>{{ formatDateTime(user.lastLoginTime) }}</td>
               <td class="text-right">
-                <button class="btn btn-plain btn-sm" type="button" @click="openMaintain(user)">
+                <!-- 维护账号需要 user:edit 权限，管理员持有 *:* 时同样可见 -->
+                <button
+                  v-if="auth.hasPermission('user:edit')"
+                  class="btn btn-plain btn-sm"
+                  type="button"
+                  @click="openMaintain(user)"
+                >
                   维护
                 </button>
+                <span v-else class="muted">-</span>
               </td>
             </tr>
           </tbody>

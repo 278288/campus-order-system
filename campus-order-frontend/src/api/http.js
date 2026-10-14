@@ -44,14 +44,29 @@ http.interceptors.response.use(
     const body = error.response?.data
     const message = body?.message || error.message || '网络异常，请稍后重试'
 
+    /**
+     * 401 与 403 语义完全不同，必须分开处理：
+     * - 401：未登录 / 令牌无效或过期 → 清空本地会话并跳转登录页；
+     * - 403：已登录但权限不足，或账号被停用 → 只提示，绝不清会话、绝不跳转，
+     *        让用户留在当前页面继续操作，由后端做最终裁决。
+     */
     if (status === 401 || (body && body.code === 401)) {
       auth.clear()
       toast.warn('登录已过期，请重新登录')
       if (location.hash !== '#/login') {
         location.hash = '#/login'
       }
-    } else if (status === 403 || (body && body.code === 403)) {
-      toast.error(message || '没有操作权限')
+    } else if (status === 403) {
+      // 同一种 403 对应两种业务含义，用响应体 message 区分提示文案
+      const forbidden = body?.message || ''
+      if (/停用|禁用/.test(forbidden)) {
+        toast.error(forbidden || '账号已被停用，请联系管理员')
+      } else {
+        toast.error(forbidden || '没有操作权限')
+      }
+    } else if (body && body.code === 403) {
+      // 业务码 403：提示信息已由后端给出，直接展示即可
+      toast.error(body.message || '没有操作权限')
     } else if (!error.response) {
       toast.error('无法连接后端服务，请确认后端已在 8088 端口启动')
     } else {

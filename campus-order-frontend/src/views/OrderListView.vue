@@ -5,10 +5,12 @@ import { orderApi } from '@/api'
 import BaseModal from '@/components/BaseModal.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
 import PaginationBar from '@/components/PaginationBar.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/utils/toast'
 import { formatDateTime, money, ORDER_STATUS, ORDER_STATUS_OPTIONS } from '@/utils/format'
 
 const router = useRouter()
+const auth = useAuthStore()
 const toast = useToast()
 
 const orders = ref([])
@@ -209,14 +211,19 @@ onUnmounted(() => {
                     查看详情
                   </button>
                   <button
-                    v-if="canCancel(order)"
+                    v-if="canCancel(order) && auth.hasPermission('order:cancel')"
                     class="btn btn-danger btn-sm"
                     type="button"
                     @click="openCancel(order)"
                   >
                     取消订单
                   </button>
-                  <button v-if="canRate(order)" class="btn btn-sm" type="button" @click="openRate(order)">
+                  <button
+                    v-if="canRate(order) && auth.hasPermission('order:rate')"
+                    class="btn btn-sm"
+                    type="button"
+                    @click="openRate(order)"
+                  >
                     评价
                   </button>
                 </div>

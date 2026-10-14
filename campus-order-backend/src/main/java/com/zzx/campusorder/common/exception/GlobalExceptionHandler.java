@@ -30,6 +30,38 @@ public class GlobalExceptionHandler {
         return Result.failure(e.getErrorCode(), e.getMessage());
     }
 
+    /**
+     * Spring Security 的授权异常。
+     *
+     * <p>方法级注解（{@code @PreAuthorize}）抛出的 {@link AccessDeniedException}
+     * 不经过过滤器链的 AccessDeniedHandler，而是由本处理器捕获，
+     * 否则会被兜底分支转成 500，导致「权限不足」被误报为系统错误。</p>
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public Result<Void> handleAccessDenied(org.springframework.security.access.AccessDeniedException e) {
+        log.warn("方法级授权拒绝：{}", e.getMessage());
+        return Result.failure(ErrorCodeEnum.FORBIDDEN, "没有操作权限，请联系管理员分配权限");
+    }
+
+    /**
+     * Spring Security 的认证异常。
+     */
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public Result<Void> handleAuthentication(org.springframework.security.core.AuthenticationException e) {
+        log.warn("认证异常：{}", e.getMessage());
+        return Result.failure(ErrorCodeEnum.UNAUTHORIZED, "未登录或登录已过期，请重新登录");
+    }
+
+    /**
+     * Redis 不可用等缓存异常：给出可读提示，避免暴露底层细节。
+     */
+    @ExceptionHandler(org.springframework.data.redis.RedisConnectionFailureException.class)
+    public Result<Void> handleRedisFailure(
+            org.springframework.data.redis.RedisConnectionFailureException e) {
+        log.error("Redis 连接失败，登录缓存不可用", e);
+        return Result.failure(ErrorCodeEnum.INTERNAL_ERROR, "缓存服务不可用，请确认 Redis 已启动");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Result<Void> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()

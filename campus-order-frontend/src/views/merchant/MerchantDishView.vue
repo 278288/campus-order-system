@@ -254,7 +254,7 @@ onMounted(() => {
           </div>
         </div>
         <button
-          v-if="myWindow"
+          v-if="myWindow && auth.hasPermission('window:business')"
           class="btn"
           :class="myWindow.businessStatus === 1 ? 'btn-plain' : 'btn-success'"
           type="button"
@@ -267,7 +267,10 @@ onMounted(() => {
     </div>
 
     <div class="row toolbar">
-      <button class="btn" type="button" @click="openCreate">新增菜品</button>
+      <!-- 新增菜品需要 dish:add 权限 -->
+      <button v-if="auth.hasPermission('dish:add')" class="btn" type="button" @click="openCreate">
+        新增菜品
+      </button>
       <button class="btn btn-plain btn-sm" type="button" :disabled="loading" @click="loadDishes">
         刷新
       </button>
@@ -310,8 +313,17 @@ onMounted(() => {
             </td>
             <td class="text-right">
               <div class="row actions">
-                <button class="btn btn-plain btn-sm" type="button" @click="openEdit(dish)">编辑</button>
+                <!-- 按权限标识控制显隐：编辑 dish:edit、上下架 dish:status、库存 dish:stock -->
                 <button
+                  v-if="auth.hasPermission('dish:edit')"
+                  class="btn btn-plain btn-sm"
+                  type="button"
+                  @click="openEdit(dish)"
+                >
+                  编辑
+                </button>
+                <button
+                  v-if="auth.hasPermission('dish:status')"
                   class="btn btn-plain btn-sm"
                   type="button"
                   :class="dish.status === 1 ? 'btn-danger' : 'btn-success'"
@@ -319,7 +331,20 @@ onMounted(() => {
                 >
                   {{ dish.status === 1 ? '下架' : '上架' }}
                 </button>
-                <button class="btn btn-plain btn-sm" type="button" @click="openStock(dish)">调整库存</button>
+                <button
+                  v-if="auth.hasPermission('dish:stock')"
+                  class="btn btn-plain btn-sm"
+                  type="button"
+                  @click="openStock(dish)"
+                >
+                  调整库存
+                </button>
+                <span
+                  v-if="!auth.hasAnyPermission('dish:edit', 'dish:status', 'dish:stock')"
+                  class="muted"
+                >
+                  -
+                </span>
               </div>
             </td>
           </tr>

@@ -1,9 +1,11 @@
 <script setup>
 import { ref } from 'vue'
 import { orderApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/utils/toast'
 import { formatDateTime, money } from '@/utils/format'
 
+const auth = useAuthStore()
 const toast = useToast()
 
 const orderNo = ref('')
@@ -101,12 +103,22 @@ function refill(item) {
             <input v-model.trim="pickupCode" type="text" placeholder="请输入顾客出示的取餐码" />
           </div>
           <div class="row">
-            <button class="btn btn-success" type="submit" :disabled="verifying">
+            <!-- 核码取餐需要 order:pickup 权限 -->
+            <button
+              v-if="auth.hasPermission('order:pickup')"
+              class="btn btn-success"
+              type="submit"
+              :disabled="verifying"
+            >
               {{ verifying ? '核验中…' : '核 验' }}
             </button>
             <button class="btn btn-plain" type="button" :disabled="verifying" @click="reset">清空</button>
           </div>
         </form>
+
+        <div v-if="!auth.hasPermission('order:pickup')" class="alert alert-warn pickup-warn">
+          当前账号没有「核码取餐」权限（order:pickup），无法核销订单。
+        </div>
 
         <!-- 核验结果面板：成功绿色、失败红色 -->
         <div v-if="result" class="result-panel" :class="result.ok ? 'ok' : 'fail'">
@@ -162,6 +174,10 @@ function refill(item) {
   margin-bottom: 6px;
   padding-bottom: 0;
   border-bottom: none;
+}
+
+.pickup-warn {
+  margin-top: 14px;
 }
 
 .result-panel {

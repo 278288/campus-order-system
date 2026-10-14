@@ -4,9 +4,11 @@ import { orderApi } from '@/api'
 import BaseModal from '@/components/BaseModal.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
 import PaginationBar from '@/components/PaginationBar.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/utils/toast'
 import { formatDateTime, money, newRequestNo, ORDER_STATUS } from '@/utils/format'
 
+const auth = useAuthStore()
 const toast = useToast()
 
 /** 页签：待接单 / 备餐中 / 待取餐 / 全部（'' 代表全部） */
@@ -232,8 +234,10 @@ watch([pageNum, pageSize], () => loadOrders())
               <td>{{ formatDateTime(order.createTime) }}</td>
               <td class="text-right">
                 <div class="row actions">
+                  <!-- 接单 / 备餐完成需要 order:accept，拒单需要 order:reject -->
                   <template v-if="order.status === ORDER_STATUS.PENDING">
                     <button
+                      v-if="auth.hasPermission('order:accept')"
                       class="btn btn-success btn-sm"
                       type="button"
                       :disabled="actingOrderNo === order.orderNo"
@@ -242,6 +246,7 @@ watch([pageNum, pageSize], () => loadOrders())
                       接单
                     </button>
                     <button
+                      v-if="auth.hasPermission('order:reject')"
                       class="btn btn-danger btn-sm"
                       type="button"
                       :disabled="actingOrderNo === order.orderNo"
@@ -251,7 +256,7 @@ watch([pageNum, pageSize], () => loadOrders())
                     </button>
                   </template>
                   <button
-                    v-else-if="order.status === ORDER_STATUS.PREPARING"
+                    v-else-if="order.status === ORDER_STATUS.PREPARING && auth.hasPermission('order:accept')"
                     class="btn btn-sm"
                     type="button"
                     :disabled="actingOrderNo === order.orderNo"
@@ -260,7 +265,7 @@ watch([pageNum, pageSize], () => loadOrders())
                     备餐完成
                   </button>
                   <button
-                    v-else-if="order.status === ORDER_STATUS.READY"
+                    v-else-if="order.status === ORDER_STATUS.READY && auth.hasPermission('order:pickup')"
                     class="btn btn-success btn-sm"
                     type="button"
                     :disabled="actingOrderNo === order.orderNo"
@@ -269,12 +274,23 @@ watch([pageNum, pageSize], () => loadOrders())
                     核码取餐
                   </button>
                   <router-link
-                    v-else
+                    v-else-if="order.status !== ORDER_STATUS.PENDING"
                     class="btn btn-plain btn-sm"
                     :to="`/orders/${order.orderNo}`"
                   >
                     查看详情
                   </router-link>
+                  <span
+                    v-if="
+                      (order.status === ORDER_STATUS.PENDING &&
+                        !auth.hasAnyPermission('order:accept', 'order:reject')) ||
+                      (order.status === ORDER_STATUS.PREPARING && !auth.hasPermission('order:accept')) ||
+                      (order.status === ORDER_STATUS.READY && !auth.hasPermission('order:pickup'))
+                    "
+                    class="muted"
+                  >
+                    -
+                  </span>
                 </div>
               </td>
             </tr>

@@ -60,3 +60,47 @@ VALUES ('FK-TEST-0001', 4, 9999, 0, 1.00, 'req-fk-test', '000002');
 SELECT '===== 13. CHECK 约束验证：插入负数金额应报 3819 =====' AS section;
 INSERT INTO orders (order_no, user_id, window_id, status, total_amount, request_no, pickup_code)
 VALUES ('CK-TEST-0001', 4, 1, 0, -1.00, 'req-ck-test', '000003');
+
+SELECT '===== 14. 菜单表结构验证：一张表承载目录/菜单/按钮三类数据 =====' AS section;
+SELECT CASE menu_type WHEN 1 THEN '1 目录' WHEN 2 THEN '2 菜单' WHEN 3 THEN '3 按钮' END AS 类型,
+       COUNT(*) AS 数量
+FROM sys_menu GROUP BY menu_type ORDER BY menu_type;
+
+SELECT '===== 15. 权限标识规范验证：全部符合「模块:操作」，且无重复挂载导致的歧义 =====' AS section;
+SELECT SUBSTRING_INDEX(perms, ':', 1) AS 模块, COUNT(DISTINCT perms) AS 权限数,
+       GROUP_CONCAT(DISTINCT perms ORDER BY perms) AS 权限标识
+FROM sys_menu WHERE perms IS NOT NULL GROUP BY 模块 ORDER BY 模块;
+
+SELECT '===== 16. 角色授权结果：各角色持有的去重权限标识 =====' AS section;
+SELECT rm.role_code AS 角色, COUNT(DISTINCT m.perms) AS 权限数,
+       GROUP_CONCAT(DISTINCT m.perms ORDER BY m.perms) AS 权限标识
+FROM sys_role_menu rm JOIN sys_menu m ON m.id = rm.menu_id
+WHERE m.perms IS NOT NULL GROUP BY rm.role_code ORDER BY rm.role_code;
+
+SELECT '===== 17. 授权完整性验证：每个角色至少持有一个权限（应返回空集）=====' AS section;
+SELECT rc.role_code
+FROM (SELECT 'ROLE_STUDENT' AS role_code UNION SELECT 'ROLE_MERCHANT' UNION SELECT 'ROLE_ADMIN') rc
+LEFT JOIN sys_role_menu rm ON rm.role_code = rc.role_code
+LEFT JOIN sys_menu m ON m.id = rm.menu_id AND m.perms IS NOT NULL
+GROUP BY rc.role_code
+HAVING COUNT(m.perms) = 0;
+
+SELECT '===== 18. 菜单树完整性验证：除顶级外每个菜单的父节点都存在（应返回空集）=====' AS section;
+SELECT c.id, c.menu_name, c.parent_id
+FROM sys_menu c
+LEFT JOIN sys_menu p ON p.id = c.parent_id
+WHERE c.parent_id <> 0 AND p.id IS NULL;
+
+SELECT '===== 19. 角色菜单唯一键验证：重复授权同一角色同一菜单应报 1062 =====' AS section;
+INSERT INTO sys_role_menu (role_code, menu_id) VALUES ('ROLE_ADMIN', 100);
+
+SELECT '===== 20. 授权层级完整性验证：已授权的子节点其父节点也必须被授权 =====' AS section;
+-- 应返回空集。若不为空，说明菜单树的父级缺失，
+-- 前端渲染时这些节点会被当成根节点裸露在导航顶层，出现无名条目。
+SELECT rm.role_code AS 角色, c.id AS 菜单ID, c.menu_name AS 菜单, c.parent_id AS 缺失的父节点
+FROM sys_role_menu rm
+JOIN sys_menu c ON c.id = rm.menu_id
+LEFT JOIN sys_role_menu rp ON rp.role_code = rm.role_code AND rp.menu_id = c.parent_id
+WHERE c.parent_id <> 0
+  AND c.menu_type <> 1
+  AND rp.menu_id IS NULL;

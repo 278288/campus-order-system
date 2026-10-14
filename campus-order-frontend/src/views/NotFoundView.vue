@@ -1,20 +1,44 @@
 <script setup>
+import { onMounted, ref } from 'vue'
+import { menuApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
-/** 不同角色给出不同的返回入口，避免把商家/管理员送到师生页面 */
-function homePath() {
-  if (auth.isMerchant) return '/merchant/orders'
-  if (auth.isAdmin) return '/admin/users'
-  return '/dishes'
+/** 默认入口；有菜单树时改用后端返回的第一个菜单，避免按角色硬编码跳转目标 */
+const homePath = ref('/dishes')
+const homeLabel = ref('去选餐')
+
+/**
+ * 从菜单树中取第一个 menuType === 2 且有 path 的节点作为 404 页的返回入口，
+ * 这样不同角色的落点完全由后端菜单配置决定。
+ */
+function firstMenuPath(nodes) {
+  if (!Array.isArray(nodes)) return null
+  for (const node of nodes) {
+    if (!node) continue
+    if (node.menuType === 2 && node.path) {
+      return { path: node.path, label: `去${node.menuName || '首页'}` }
+    }
+    const hit = firstMenuPath(node.children)
+    if (hit) return hit
+  }
+  return null
 }
 
-function homeLabel() {
-  if (auth.isMerchant) return '去接单与备餐'
-  if (auth.isAdmin) return '去账号与角色'
-  return '去选餐'
-}
+onMounted(async () => {
+  if (!auth.isLoggedIn) return
+  try {
+    const tree = await menuApi.myMenus()
+    const hit = firstMenuPath(tree)
+    if (hit) {
+      homePath.value = hit.path
+      homeLabel.value = hit.label
+    }
+  } catch {
+    // 菜单加载失败时保留默认入口（401 已由拦截器处理）
+  }
+})
 </script>
 
 <template>
@@ -26,7 +50,7 @@ function homeLabel() {
         你访问的页面可能已被移除，或者地址输入有误。请检查链接后重试。
       </p>
       <div class="row actions">
-        <router-link class="btn" :to="homePath()">{{ homeLabel() }}</router-link>
+        <router-link class="btn" :to="homePath">{{ homeLabel }}</router-link>
         <router-link class="btn btn-plain" to="/dishes">去选餐</router-link>
       </div>
     </div>

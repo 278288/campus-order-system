@@ -3,7 +3,9 @@ package com.zzx.campusorder.feature.window.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zzx.campusorder.common.exception.BusinessException;
 import com.zzx.campusorder.common.security.Roles;
-import com.zzx.campusorder.common.security.UserContext;
+import com.zzx.campusorder.common.security.DbUserDetails;
+import com.zzx.campusorder.common.security.SecurityUtils;
+import com.zzx.campusorder.common.security.Roles;
 import com.zzx.campusorder.feature.dish.entity.Dish;
 import com.zzx.campusorder.feature.dish.mapper.DishMapper;
 import com.zzx.campusorder.feature.order.entity.Order;
@@ -53,7 +55,7 @@ public class WindowService {
 
     @Transactional(rollbackFor = Exception.class)
     public CanteenWindow create(WindowSaveRequest request) {
-        Roles.requireAdmin();
+        // 权限由路径级规则 window:add 保证
         Long count = windowMapper.selectCount(new LambdaQueryWrapper<CanteenWindow>()
                 .eq(CanteenWindow::getWindowName, request.getWindowName()));
         if (count != null && count > 0) {
@@ -73,7 +75,7 @@ public class WindowService {
      */
     @Transactional(rollbackFor = Exception.class)
     public CanteenWindow update(Long id, WindowSaveRequest request) {
-        Roles.requireAdmin();
+        // 权限由路径级规则 window:edit 保证
         CanteenWindow exists = getById(id);
         Long count = windowMapper.selectCount(new LambdaQueryWrapper<CanteenWindow>()
                 .eq(CanteenWindow::getWindowName, request.getWindowName())
@@ -97,10 +99,12 @@ public class WindowService {
             throw BusinessException.badRequest("营业状态只能是 0（打烊）或 1（营业中）");
         }
         CanteenWindow window = getById(id);
-        UserContext.LoginUser loginUser = UserContext.get();
-        boolean isAdmin = loginUser != null && Roles.ADMIN.equals(loginUser.getRole());
-        boolean isOwner = loginUser != null && Roles.MERCHANT.equals(loginUser.getRole())
-                && belongsToMerchant(id, loginUser.getUserId());
+        // 路径级规则要求 window:edit 权限；此处再校验数据归属：
+        // 管理员可维护任意窗口，商家只能维护本人所属窗口
+        DbUserDetails details = SecurityUtils.currentUserOrNull();
+        boolean isAdmin = SecurityUtils.isSuperAdmin() || SecurityUtils.hasRole(Roles.ADMIN);
+        boolean isOwner = details != null && SecurityUtils.hasRoleCode(Roles.CODE_MERCHANT)
+                && belongsToMerchant(id, details.getUserId());
         if (!isAdmin && !isOwner) {
             throw BusinessException.forbidden("只能维护本人所属窗口的营业状态");
         }
@@ -114,7 +118,7 @@ public class WindowService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void changeStatus(Long id, Integer status) {
-        Roles.requireAdmin();
+        // 权限由路径级规则 window:status 保证，此处只做参数与状态校验
         if (status == null || (status != 0 && status != 1)) {
             throw BusinessException.badRequest("窗口状态只能是 0（停用）或 1（启用）");
         }
@@ -133,8 +137,10 @@ public class WindowService {
      * 查询当前商家负责的窗口；一个商家可能负责多个窗口，取第一个作为默认操作对象。
      */
     public CanteenWindow requireMerchantWindow() {
-        Roles.requireMerchant();
-        Long userId = UserContext.requireUserId();
+        if (!SecurityUtils.hasRoleCode(Roles.CODE_MERCHANT)) {
+            throw BusinessException.forbidden("该操作仅食堂商家可执行");
+        }
+        Long userId = SecurityUtils.requireUserId();
         List<WindowManager> relations = windowManagerMapper.selectList(new LambdaQueryWrapper<WindowManager>()
                 .eq(WindowManager::getUserId, userId)
                 .orderByAsc(WindowManager::getId));

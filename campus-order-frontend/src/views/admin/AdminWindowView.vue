@@ -2,9 +2,11 @@
 import { onMounted, reactive, ref } from 'vue'
 import { windowApi } from '@/api'
 import BaseModal from '@/components/BaseModal.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/utils/toast'
 import { formatDateTime } from '@/utils/format'
 
+const auth = useAuthStore()
 const toast = useToast()
 
 const windows = ref([])
@@ -129,7 +131,10 @@ onMounted(loadWindows)
     </div>
 
     <div class="row toolbar">
-      <button class="btn" type="button" @click="openCreate">新增窗口</button>
+      <!-- 新增窗口需要 window:add 权限 -->
+      <button v-if="auth.hasPermission('window:add')" class="btn" type="button" @click="openCreate">
+        新增窗口
+      </button>
       <button class="btn btn-plain btn-sm" type="button" :disabled="loading" @click="loadWindows">
         刷新
       </button>
@@ -170,11 +175,25 @@ onMounted(loadWindows)
             <td>{{ formatDateTime(item.createTime) }}</td>
             <td class="text-right">
               <div class="row actions">
-                <button class="btn btn-plain btn-sm" type="button" @click="openEdit(item)">编辑</button>
-                <button class="btn btn-plain btn-sm" type="button" @click="toggleBusiness(item)">
+                <!-- 按钮按权限标识控制显隐：编辑 window:edit、营业 window:business、启停 window:status -->
+                <button
+                  v-if="auth.hasPermission('window:edit')"
+                  class="btn btn-plain btn-sm"
+                  type="button"
+                  @click="openEdit(item)"
+                >
+                  编辑
+                </button>
+                <button
+                  v-if="auth.hasPermission('window:business')"
+                  class="btn btn-plain btn-sm"
+                  type="button"
+                  @click="toggleBusiness(item)"
+                >
                   {{ item.businessStatus === 1 ? '打烊' : '营业' }}
                 </button>
                 <button
+                  v-if="auth.hasPermission('window:status')"
                   class="btn btn-sm"
                   :class="item.status === 1 ? 'btn-danger' : 'btn-success'"
                   type="button"
@@ -182,6 +201,14 @@ onMounted(loadWindows)
                 >
                   {{ item.status === 1 ? '停用' : '启用' }}
                 </button>
+                <span
+                  v-if="
+                    !auth.hasAnyPermission('window:edit', 'window:business', 'window:status')
+                  "
+                  class="muted"
+                >
+                  -
+                </span>
               </div>
             </td>
           </tr>

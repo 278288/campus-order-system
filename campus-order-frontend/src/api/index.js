@@ -4,10 +4,17 @@ import http from './http'
 export const authApi = {
   register: (payload) => http.post('/api/auth/register', payload),
   login: (payload) => http.post('/api/auth/login', payload),
+  /** 退出登录：服务端删除 Redis 用户缓存并清空安全上下文，原令牌立即失效 */
+  logout: () => http.post('/api/auth/logout', {}),
   me: () => http.get('/api/users/me'),
   updateMe: (payload) => http.put('/api/users/me', payload),
   pageUsers: (params) => http.get('/api/users', { params }),
   assignRole: (id, payload) => http.put(`/api/users/${id}/role`, payload)
+}
+
+/** 菜单接口：返回当前登录用户可见的菜单树（menuType 1=目录 2=菜单 3=按钮） */
+export const menuApi = {
+  myMenus: () => http.get('/api/menus/mine')
 }
 
 /** 只读公开接口：未登录也可浏览食堂窗口与在售菜品 */

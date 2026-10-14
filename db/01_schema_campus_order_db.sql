@@ -165,8 +165,168 @@ CREATE TABLE `order_item`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT ='订单明细表，保存菜品名称与单价的成交快照';
 
+-- -----------------------------------------------------------------------------
+-- 7. 菜单表 sys_menu（实验4：授权）。
+--    用一张表承载目录、菜单、按钮三类数据，通过 menu_type 区分：
+--      1 目录（M）——只用于分组，不直接对应接口
+--      2 菜单（C）——对应一个页面
+--      3 按钮（F）——对应一个具体操作，是权限标识的挂载点
+--    权限标识 perms 统一遵循「模块:操作」命名规范，如 user:list、order:accept。
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS `sys_menu`;
+CREATE TABLE `sys_menu`
+(
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '菜单主键',
+    `parent_id`   BIGINT       NOT NULL DEFAULT 0 COMMENT '父菜单编号，0 表示顶级',
+    `menu_name`   VARCHAR(50)  NOT NULL COMMENT '菜单名称',
+    `menu_type`   TINYINT      NOT NULL COMMENT '类型：1 目录，2 菜单，3 按钮',
+    `perms`       VARCHAR(64)  DEFAULT NULL COMMENT '权限标识，模块:操作，如 user:list',
+    `path`        VARCHAR(100) DEFAULT NULL COMMENT '前端路由地址',
+    `component`   VARCHAR(100) DEFAULT NULL COMMENT '前端组件路径',
+    `icon`        VARCHAR(50)  DEFAULT NULL COMMENT '菜单图标',
+    `order_num`   INT          NOT NULL DEFAULT 0 COMMENT '同级显示顺序',
+    `visible`     TINYINT      NOT NULL DEFAULT 1 COMMENT '是否显示：1 显示，0 隐藏',
+    `status`      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常，0 停用',
+    `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_menu_parent` (`parent_id`),
+    KEY `idx_menu_perms` (`perms`),
+    CONSTRAINT `ck_menu_type` CHECK (`menu_type` BETWEEN 1 AND 3)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT ='菜单表，一张表承载目录、菜单、按钮三类数据';
+
+-- -----------------------------------------------------------------------------
+-- 8. 角色菜单关联表 sys_role_menu。
+--    角色用角色编码（ROLE_STUDENT / ROLE_MERCHANT / ROLE_ADMIN）标识，
+--    与 user.role 数值一一对应；这样授权关系可以直接写 SQL 维护，无需额外的角色表。
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS `sys_role_menu`;
+CREATE TABLE `sys_role_menu`
+(
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '关联主键',
+    `role_code`   VARCHAR(32) NOT NULL COMMENT '角色编码，如 ROLE_ADMIN',
+    `menu_id`     BIGINT      NOT NULL COMMENT '菜单编号，引用 sys_menu.id',
+    `create_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '授权时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_role_menu` (`role_code`, `menu_id`),
+    KEY `idx_role_menu_menu` (`menu_id`),
+    CONSTRAINT `fk_role_menu_menu` FOREIGN KEY (`menu_id`) REFERENCES `sys_menu` (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT ='角色菜单关联表，保存角色与菜单、按钮权限的授权关系';
+
 -- =============================================================================
--- 测试数据
+-- 菜单与授权数据（实验4：授权）
+-- 权限标识统一为「模块:操作」。目录与菜单本身不参与接口鉴权，
+-- 鉴权使用挂在按钮上的权限标识；角色菜单关联表决定每个角色可见的菜单与可用操作。
+-- =============================================================================
+
+-- 目录：0 顶级
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `path`, `icon`, `order_num`)
+VALUES (100, 0, '平台管理', 1, NULL, NULL, 'setting', 1),
+       (200, 0, '窗口经营', 1, NULL, NULL, 'shop', 2),
+       (300, 0, '我的点餐', 1, NULL, NULL, 'food', 3);
+
+-- 平台管理下的菜单
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `path`, `component`, `order_num`)
+VALUES (101, 100, '账号与角色', 2, NULL, '/admin/users', 'admin/AdminUserView', 1),
+       (102, 100, '食堂窗口', 2, NULL, '/admin/windows', 'admin/AdminWindowView', 2),
+       (103, 100, '全平台订单', 2, NULL, '/admin/orders', 'admin/AdminOrderView', 3),
+       (104, 100, '平台统计', 2, NULL, '/admin/stats', 'admin/AdminStatsView', 4);
+
+-- 平台管理下的按钮权限（模块:操作）
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `order_num`)
+VALUES (105, 101, '查询账号列表', 3, 'user:list', 1),
+       (106, 101, '查询账号详情', 3, 'user:query', 2),
+       (107, 101, '维护账号角色', 3, 'user:edit', 3),
+       (108, 101, '启停账号', 3, 'user:status', 4),
+       (109, 102, '查询窗口列表', 3, 'window:list', 1),
+       (110, 102, '查询窗口详情', 3, 'window:query', 2),
+       (111, 102, '新增窗口', 3, 'window:add', 3),
+       (112, 102, '修改窗口', 3, 'window:edit', 4),
+       (113, 102, '启停窗口', 3, 'window:status', 5),
+       (117, 102, '维护窗口营业状态', 3, 'window:business', 6),
+       (114, 103, '查询订单列表', 3, 'order:list', 1),
+       (115, 103, '查询订单详情', 3, 'order:query', 2),
+       (116, 104, '查看统计报表', 3, 'stats:list', 1);
+
+-- 窗口经营下的菜单
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `path`, `component`, `order_num`)
+VALUES (201, 200, '接单与备餐', 2, NULL, '/merchant/orders', 'merchant/MerchantOrderView', 1),
+       (202, 200, '核码取餐', 2, NULL, '/merchant/pickup', 'merchant/MerchantPickupView', 2),
+       (203, 200, '菜品维护', 2, NULL, '/merchant/dishes', 'merchant/MerchantDishView', 3),
+       (204, 200, '窗口统计', 2, NULL, '/merchant/stats', 'merchant/MerchantStatsView', 4);
+
+-- 窗口经营下的按钮权限
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `order_num`)
+VALUES (205, 203, '查询本窗口菜品', 3, 'dish:list', 1),
+       (206, 203, '查询菜品详情', 3, 'dish:query', 2),
+       (207, 203, '新增菜品', 3, 'dish:add', 3),
+       (208, 203, '修改菜品', 3, 'dish:edit', 4),
+       (209, 203, '菜品上下架', 3, 'dish:status', 5),
+       (210, 203, '调整菜品库存', 3, 'dish:stock', 6),
+       (211, 201, '接单与流转状态', 3, 'order:accept', 1),
+       (212, 201, '拒单', 3, 'order:reject', 2),
+       (213, 202, '核验取餐码', 3, 'order:pickup', 1),
+       (214, 204, '查看窗口统计', 3, 'stats:list', 1),
+       -- 商家需要给自己所属窗口打烊，因此授予 window:business。
+       -- 注意父节点必须是商家已被授权的菜单（204 窗口统计），
+       -- 否则该按钮不会出现在商家的菜单树里，前端就拿不到这个权限。
+       -- window:add / window:edit / window:status 仍仅管理员持有。
+       (215, 204, '维护本人窗口营业状态', 3, 'window:business', 2);
+
+-- 我的点餐下的菜单
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `path`, `component`, `order_num`)
+VALUES (301, 300, '浏览菜品', 2, NULL, '/dishes', 'DishBrowseView', 1),
+       (302, 300, '购物车', 2, NULL, '/cart', 'CartView', 2),
+       (303, 300, '我的订单', 2, NULL, '/orders', 'OrderListView', 3);
+
+-- 我的点餐下的按钮权限
+-- 注意：order:list 与 order:query 在学生端与商家端都要用，因此分别挂在两个菜单下；
+-- 权限标识在接口鉴权时只看值不看来源，重复挂载不会产生问题，
+-- 但角色授权时会按 DISTINCT 去重，避免唯一键冲突。
+INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_type`, `perms`, `order_num`)
+VALUES (304, 301, '浏览在售菜品', 3, 'dish:list', 1),
+       (305, 301, '查询菜品详情', 3, 'dish:query', 2),
+       (306, 303, '查询本人订单', 3, 'order:list', 1),
+       (307, 303, '查询订单详情', 3, 'order:query', 2),
+       (308, 303, '提交订单', 3, 'order:create', 3),
+       (309, 303, '取消订单', 3, 'order:cancel', 4),
+       (310, 303, '评价订单', 3, 'order:rate', 5);
+
+-- 角色授权：管理员拥有全部菜单与按钮
+INSERT INTO `sys_role_menu` (`role_code`, `menu_id`)
+SELECT 'ROLE_ADMIN', `id` FROM `sys_menu`;
+
+-- 角色授权：商家 = 「窗口经营」整个目录 + 「全平台订单」这条订单查询子树的完整层级
+-- （100 平台管理 → 103 全平台订单 → 114/115 两个按钮）。
+-- 必须连父级一起授予：若子节点的父菜单未被授权，该节点会因为找不到父节点
+-- 而被当成根节点裸露在菜单树顶层，前端导航会出现无名条目。
+-- 数据库自检脚本第 20 项专门校验这一约束。
+-- 用 DISTINCT 去重，避免 order:list / order:query 在两处菜单下重复挂载导致唯一键冲突。
+INSERT INTO `sys_role_menu` (`role_code`, `menu_id`)
+SELECT DISTINCT 'ROLE_MERCHANT', `id`
+FROM `sys_menu`
+WHERE `id` = 200
+   OR `parent_id` = 200
+   OR `parent_id` IN (SELECT `id` FROM (SELECT `id` FROM `sys_menu` WHERE `parent_id` = 200) AS t)
+   OR `id` IN (100, 103, 114, 115);
+
+-- 角色授权：师生用户 = 「我的点餐」整个目录（含其下菜单与按钮）+ 浏览菜品所需的查询权限。
+-- 注意这里要排除 205/206：它们与 304/305 权限标识相同，但挂在商家的「菜品维护」菜单下，
+-- 若一并授予，学生菜单树会多出一条上级为「窗口经营」的商家菜单。
+INSERT INTO `sys_role_menu` (`role_code`, `menu_id`)
+SELECT 'ROLE_STUDENT', `id`
+FROM `sys_menu`
+WHERE `id` = 300
+   OR `parent_id` = 300
+   OR `parent_id` IN (SELECT `id` FROM (SELECT `id` FROM `sys_menu` WHERE `parent_id` = 300) AS t)
+   OR `id` IN (304, 305);
+
+-- =============================================================================
+-- 业务测试数据
 -- 密码约定：所有测试账号的初始密码均为 123456，
 -- 数据库中保存的是 BCrypt 带盐哈希，禁止保存明文。
 -- =============================================================================

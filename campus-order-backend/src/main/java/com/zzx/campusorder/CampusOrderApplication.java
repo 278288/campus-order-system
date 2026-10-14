@@ -15,7 +15,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         "com.zzx.campusorder.feature.window.mapper",
         "com.zzx.campusorder.feature.dish.mapper",
         "com.zzx.campusorder.feature.order.mapper",
-        "com.zzx.campusorder.feature.stats.mapper"
+        "com.zzx.campusorder.feature.stats.mapper",
+        "com.zzx.campusorder.feature.menu.mapper"
 })
 public class CampusOrderApplication {
 

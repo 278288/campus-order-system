@@ -124,7 +124,7 @@ onMounted(loadDetail)
           <div class="muted pickup-hint">请到 {{ order.windowName }} 报出取餐码取餐</div>
         </div>
 
-        <div v-if="canCancel" class="row cancel-row">
+        <div v-if="canCancel && auth.hasPermission('order:cancel')" class="row cancel-row">
           <button class="btn btn-danger" type="button" @click="cancelVisible = true">取消订单</button>
         </div>
       </div>
